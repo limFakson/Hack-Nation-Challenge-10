@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.sqlite3"
+}
+
+// Represents a talented individual on the platform.
+model Talent {
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  password      String        // Hashed password
+  name          String
+  region        String?
+  availability  String?       // e.g., 'full-time', 'part-time', 'project-based'
+  skills        String?       // A list of skills stored as JSON or CSV
+  talentScore   Int           @default(0) // Computed score from ML
+  bio           String?
+  resumeUrl     String?       // URL to uploaded resume
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relationships
+  assignments   Assignment[]
+  pastWorks     PastWork[]
+}
+
+// Represents a recruiter or company on the platform.
+model Recruiter {
+  id            Int           @id @default(autoincrement())
+  email         String        @unique
+  password      String        // Hashed password
+  companyName   String
+  contactName   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relationships
+  jobs          Job[]
+}
+
+// Represents a job posting created by a recruiter.
+model Job {
+  id                      Int           @id @default(autoincrement())
+  title                   String
+  description             String
+  requiredSkills          String        // A list of required skills stored as JSON or CSV
+  requiredRegion          String?
+  availabilityRequirement String?       // e.g., 'full-time'
+  status                  String        @default("Open") // 'Open', 'Assigned', 'Completed'
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  // Relationships
+  recruiterId             Int
+  recruiter               Recruiter     @relation(fields: [recruiterId], references: [id])
+  assignments             Assignment[]
+  pastWorks               PastWork[]
+}
+
+// Links a talent to a job. Main assignment table.
+model Assignment {
+  id         Int      @id @default(autoincrement())
+  talentId   Int
+  jobId      Int
+  assignedAt DateTime @default(now())
+  status     String   @default("Pending") // 'Pending', 'In Progress', 'Completed'
+  
+  // Relationships
+  talent     Talent   @relation(fields: [talentId], references: [id])
+  job        Job      @relation(fields: [jobId], references: [id])
+
+  @@unique([talentId, jobId])
+}
+
+// Stores a talent's past work for scoring.
+model PastWork {
+  id                      Int      @id @default(autoincrement())
+  talentId                Int
+  jobId                   Int
+  completionDate          DateTime
+  recruiterFeedback       String      // feedback description
+  rating                  Int         // 1-5 stars      
+  projectComplexityScore  Int         // 1-10
+  
+  // Relationships
+  talent                  Talent   @relation(fields: [talentId], references: [id])
+  job                     Job      @relation(fields: [jobId], references: [id])
+}
