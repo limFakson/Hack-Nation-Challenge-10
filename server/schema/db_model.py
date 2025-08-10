@@ -141,3 +141,7 @@ class PastWork(PastWorkBase):
 
     class Config(Config):
         pass
+
+
+class JobAssignmentRequest(BaseModel):
+    talentId: str

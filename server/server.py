@@ -18,6 +18,7 @@ from schema.db_model import (
     PastWork,
     Job,
     JobCreate,
+    JobAssignmentRequest,
     Recruiter,
     RecruiterCreate,
     RecruiterUpdate,
@@ -267,3 +268,114 @@ async def get_my_details(request: Request):
         raise HTTPException(status_code=404, detail="Talent not found.")
 
     return recruiter_details
+
+
+# Api function for job base
+@app.post("/jobs", response_model=Job, status_code=201)
+async def create_job(
+    job_data: JobCreate, request: Request
+):
+    """
+    Creates a new job posting. This endpoint is protected and only accessible
+    by authenticated recruiters.
+    """
+    try:
+        recruiter_id = request.state.user["id"]
+    except (AttributeError, KeyError):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to create a job.",
+        )
+
+    # The JobCreate Pydantic model already includes recruiterId, but we
+    if job_data.recruiterId != recruiter_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only create jobs for your own account.",
+        )
+
+    if job_data.get("requiredSkills"):
+        job_data["requiredSkills"] = json.dumps(job_data["requiredSkills"])
+        
+    new_job = await db.job.create(data=job_data.dict())
+    return new_job
+
+
+@app.get("/jobs/{job_id}", response_model=Job)
+async def get_job_details(job_id: str):
+    """
+    Retrieves the details of a specific job by its ID.
+    This is a public endpoint.
+    """
+    job = await db.job.find_unique(where={"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    
+    if job.requiredSkills:
+        job.requiredSkills = json.loads(job.requiredSkills)
+        
+    return job
+
+
+@app.post("/jobs/{job_id}/assign", response_model=Job)
+async def assign_job_to_talent(
+    job_id: str,
+    assignment_data: JobAssignmentRequest,
+    request: Request,
+):
+    """
+    Assigns a job to a specific talent. This endpoint is protected and only
+    accessible by the recruiter who created the job. It also creates a
+    record in the PastWork table to track the assignment.
+    """
+    try:
+        recruiter_id = request.state.user["id"]
+    except (AttributeError, KeyError):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to assign this job.",
+        )
+
+    # Verify that the recruiter owns this job
+    job = await db.job.find_unique(where={"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    if job.recruiterId != recruiter_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to assign this job.",
+        )
+
+    # Verify the talent exists
+    talent = await db.talent.find_unique(where={"id": assignment_data.talentId})
+    if not talent:
+        raise HTTPException(status_code=404, detail="Talent not found.")
+
+    # Assign the job to the talent
+    assignment = await db.assignment.create(
+        data={
+            "talentId": assignment_data.talentId,
+            "jobId": job_id,
+            "status": "In Progress",
+        }
+    )
+
+    # Update the job status to 'Assigned'
+    updated_job = await db.job.update(where={"id": job_id}, data={"status": "Assigned"})
+
+    # Create a record in the PastWork table.
+    await db.pastwork.create(
+        data={
+            "talentId": assignment_data.talentId,
+            "jobId": job_id,
+            "completionDate": None,  # Will be filled later
+            "recruiterFeedbackRating": 0,
+            "projectComplexityScore": 0,
+        }
+    )
+
+    if job.requiredSkills:
+        job.requiredSkills = json.loads(job.requiredSkills)
+
+    return updated_job

@@ -1,0 +1,33 @@
+# 1️⃣ Use official Python image
+FROM python:3.13-slim
+
+# 2️⃣ Set working directory
+WORKDIR /app
+
+# 3️⃣ Install system dependencies for Prisma
+RUN apt-get update && apt-get install -y \
+    openssl \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4️⃣ Copy dependency file and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 5️⃣ Install Prisma CLI globally (Node.js needed)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g prisma
+
+# 6️⃣ Copy the app code
+COPY . .
+
+# 7️⃣ Generate Prisma client & fetch binaries
+RUN prisma generate && prisma py fetch
+
+# 8️⃣ Expose port
+EXPOSE 8000
+
+# 9️⃣ Start FastAPI with Uvicorn
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
