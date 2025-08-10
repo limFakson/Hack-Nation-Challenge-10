@@ -58,7 +58,8 @@ An AI-powered marketplace built to revolutionize the hiring process for AI and t
 *   POST /jobs: Creates a new job posting (**Recruiter only**).
     
 *   GET /jobs/{job_id}/candidates: Finds the best candidates for a specific job (**Recruiter only**).
-    
+
+## Every endpoints needs an authorization token header excluding /login, /signup, /docs, /open.json
     
 
 ### **What We Have Done So Far**
